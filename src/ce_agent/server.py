@@ -139,7 +139,7 @@ class AgentServer:
         message_type = request.get("type")
         if message_type == "list_sessions":
             sessions = [self._session_json(s) for s in self.store.list_sessions()]
-            await self._send(websocket, {"type": "session_list", "sessions": sessions})
+            await self._send(websocket, {"type": "sessions", "sessions": sessions})
         elif message_type == "create_session":
             await self._create_session(websocket, request)
         elif message_type == "attach_session":
@@ -159,12 +159,14 @@ class AgentServer:
             await self._error(websocket, "unknown_type", "Unsupported message type")
 
     def _session_json(self, session: Session) -> dict:
+        tmux_running = self.tmux.exists(session.id)
         return {
             "id": session.id,
             "name": session.name,
             "command": session.command,
-            "created": session.created,
-            "last_active": session.last_active,
+            "created_at": session.created,
+            "updated_at": session.last_active,
+            "status": "running" if tmux_running else "stopped",
             "attached": bool(self._subscribers.get(session.id)),
         }
 
@@ -252,7 +254,9 @@ class AgentServer:
         self.tmux.kill(session_id)
         self.store.delete_session(session_id)
         for client in self._subscribers.pop(session_id, set()).copy():
+            if client is websocket:
+                continue
             await self._send(client, {"type": "session_ended", "session_id": session_id})
         attached.discard(session_id)
-        await self._send(websocket, {"type": "session_killed", "session_id": session_id})
+        await self._send(websocket, {"type": "session_killed", "id": session_id})
 

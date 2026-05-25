@@ -22,6 +22,11 @@ def build_parser() -> argparse.ArgumentParser:
     token = subparsers.add_parser("token", help="generate a short-lived authentication token")
     token.add_argument("--data-dir", default=default_data_dir(), type=Path)
     token.add_argument("--ts", type=int)
+    token.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the complete WebSocket auth message expected by clients",
+    )
     return parser
 
 
@@ -30,7 +35,10 @@ def main() -> None:
     if args.command == "token":
         timestamp = int(time.time()) if args.ts is None else args.ts
         secret = ensure_secret(args.data_dir)
-        print(json.dumps({"token": generate_token(secret, timestamp), "ts": timestamp}))
+        payload = {"token": generate_token(secret, timestamp), "ts": timestamp}
+        if args.json:
+            payload = {"type": "auth", **payload}
+        print(json.dumps(payload))
         return
     server = AgentServer(args.data_dir, args.host, args.port)
     try:

@@ -35,6 +35,13 @@ Generate an authentication message payload using the same data directory:
 ce-agent token --data-dir /tmp/ce-agent-data
 ```
 
+For clients that want to send the token output directly as the first
+WebSocket message, use the canonical JSON auth form:
+
+```bash
+ce-agent token --data-dir /tmp/ce-agent-data --json
+```
+
 The secret is generated on first use as `agent.secret` with mode `0600`.
 Tokens are `HMAC_SHA256(secret, str(ts))` values accepted within five minutes
 of the supplied Unix timestamp.
@@ -50,6 +57,18 @@ The first WebSocket JSON message must be:
 After an `authenticated` reply, supported request types are
 `list_sessions`, `create_session`, `attach_session`, `input`, `resize`,
 `detach`, and `kill_session`. Each tmux session is named `ce-<session_id>`.
+
+`list_sessions` replies with the canonical client contract shape:
+
+```json
+{"type":"sessions","sessions":[{"id":"sess_abc123","name":"zsh","command":"zsh","created_at":"...","updated_at":"...","status":"running","attached":false}]}
+```
+
+`kill_session` replies with:
+
+```json
+{"type":"session_killed","id":"sess_abc123"}
+```
 
 `attach_session` uses `scrollback` as the last output sequence already
 received by the client:
