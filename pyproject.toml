@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ce-agent"
+version = "0.1.0"
+description = "Code Explorer persistent tmux session daemon prototype"
+requires-python = ">=3.9"
+dependencies = ["websockets>=15"]
+
+[project.scripts]
+ce-agent = "ce_agent.cli:main"
+ce-agent-demo = "ce_agent.demo:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
