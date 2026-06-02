@@ -1,9 +1,10 @@
 import json
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 
 def utc_timestamp() -> str:
@@ -37,8 +38,17 @@ class Store:
         connection.row_factory = sqlite3.Row
         return connection
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        connection = self._connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -54,7 +64,7 @@ class Store:
 
     def create_session(self, session_id: str, name: str, command: str) -> Session:
         now = utc_timestamp()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?)",
                 (session_id, name, command, now, now, 0),
@@ -63,35 +73,35 @@ class Store:
         return Session(session_id, name, command, now, now, 0)
 
     def get_session(self, session_id: str) -> Optional[Session]:
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute(
                 "SELECT * FROM sessions WHERE id = ?", (session_id,)
             ).fetchone()
         return Session(**dict(row)) if row else None
 
     def list_sessions(self) -> List[Session]:
-        with self._connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(
                 "SELECT * FROM sessions ORDER BY created"
             ).fetchall()
         return [Session(**dict(row)) for row in rows]
 
     def touch(self, session_id: str) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 "UPDATE sessions SET last_active = ? WHERE id = ?",
                 (utc_timestamp(), session_id),
             )
 
     def set_raw_offset(self, session_id: str, offset: int) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 "UPDATE sessions SET raw_offset = ?, last_active = ? WHERE id = ?",
                 (offset, utc_timestamp(), session_id),
             )
 
     def delete_session(self, session_id: str) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         self._next_seq.pop(session_id, None)
 
@@ -130,4 +140,3 @@ class Store:
                 if event["seq"] > after_seq:
                     events.append(event)
         return events
-

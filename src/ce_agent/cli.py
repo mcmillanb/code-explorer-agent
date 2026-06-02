@@ -1,6 +1,8 @@
 import argparse
 import asyncio
+import errno
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -43,6 +45,15 @@ def main() -> None:
     server = AgentServer(args.data_dir, args.host, args.port)
     try:
         asyncio.run(server.serve_forever())
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+        print(
+            "ce-agent daemon could not bind {}:{}: address already in use".format(
+                args.host, args.port
+            ),
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     except KeyboardInterrupt:
         pass
-

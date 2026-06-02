@@ -1,11 +1,13 @@
 import asyncio
+import errno
 import io
 import json
 import sys
 import time
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
+import pytest
 import websockets
 
 from ce_agent.auth import generate_token
@@ -36,6 +38,29 @@ def run_cli(args):
     with patch.object(sys, "argv", ["ce-agent", *args]), redirect_stdout(output):
         main()
     return output.getvalue().strip()
+
+
+def test_daemon_reports_address_in_use_without_traceback():
+    class FakeServer:
+        def __init__(self, data_dir, host, port):
+            pass
+
+        async def serve_forever(self):
+            raise OSError(errno.EADDRINUSE, "address already in use")
+
+    output = io.StringIO()
+    with (
+        patch("ce_agent.cli.AgentServer", FakeServer),
+        patch.object(sys, "argv", ["ce-agent", "daemon"]),
+        redirect_stderr(output),
+        pytest.raises(SystemExit) as exc,
+    ):
+        main()
+
+    assert exc.value.code == 1
+    assert output.getvalue() == (
+        "ce-agent daemon could not bind 127.0.0.1:7681: address already in use\n"
+    )
 
 
 def test_token_json_emits_auth_message(tmp_path):
